@@ -501,7 +501,8 @@ def handle_equipos(ack, respond, command):
         logger.error(f"Error en comando /equipos con búsqueda '{busqueda}': {e}")
         respond("❌ Error al realizar la búsqueda en la base de datos.")
 
-# --- COMANDOS Y ACCIONES PARA TABLEROS ELÉCTRICOS ---
+# --- COMANDOS Y ACCIONES PARA TABLEROS ELÉCTRICOS (INTERFAZ COMPLETA) ---
+
 @app.command("/tablerodec2")
 @app.command("/tablerodec3")
 @app.command("/tableros")
@@ -510,44 +511,60 @@ def handle_tableros(ack, respond, command):
     
     def procesar_tarea():
         comando_usado = command.get("command", "/tableros")
-        nombre_tablero = "Tablero Decanter 2" if "2" in comando_usado else ("Tablero Decanter 3" if "3" in comando_usado else "Tablero Eléctrico")
+        nombre_tablero = "TABLERO DECANTER 2-3" if ("dec2" in comando_usado or "dec3" in comando_usado) else "TABLERO ELÉCTRICO"
         
         try:
-            # Tarjeta de resumen limpia con los datos de mantención y acreditación
+            componentes = SheetsRepository.obtener_filas_pestaña("TABLEROS ELECTRICOS")
+            
+            # Construye las opciones para el menú desplegable
+            opciones_dropdown = []
+            for item in componentes:
+                nombre_comp = item.get("COMPONENTE") or item.get("EQUIPO") or item.get("Nombre") or "Componente"
+                marca = item.get("MARCA", "")
+                label = f"{nombre_comp} | {marca}".strip(" |")[:75]
+                
+                opciones_dropdown.append({
+                    "text": {"type": "plain_text", "text": label, "emoji": True},
+                    "value": str(nombre_comp)[:75]
+                })
+            
+            # Limita a 100 por restricción de Slack
+            opciones_dropdown = opciones_dropdown[:100] if opciones_dropdown else [
+                {"text": {"type": "plain_text", "text": "Sin componentes registrados", "emoji": True}, "value": "ninguno"}
+            ]
+
             bloques = [
                 {
-                    "type": "header",
+                    "type": "section",
                     "text": {
-                        "type": "plain_text",
-                        "text": f"⚡ ESTADO Y MANTENCIÓN: {nombre_tablero.upper()}",
-                        "emoji": True
+                        "type": "mrkdwn",
+                        "text": f"🎛️ *Estado Principal: {nombre_tablero}*"
                     }
                 },
                 {
                     "type": "section",
                     "fields": [
-                        {"type": "mrkdwn", "text": "*📜 Vencimiento Acreditación:*\n15/12/2026"},
-                        {"type": "mrkdwn", "text": "*🛠️ Última Mantención:*\n10/08/2026"},
-                        {"type": "mrkdwn", "text": "*📅 Próxima Mantención:*\n10/11/2026"},
-                        {"type": "mrkdwn", "text": "*🟢 Estado:*\nOperativo"}
+                        {"type": "mrkdwn", "text": "🗓️ *Última Mantención:*\n`2026-08-15 00:00:00`"},
+                        {"type": "mrkdwn", "text": "🗓️ *Próxima Mantención:*\n`2026-11-15 00:00:00`"},
+                        {"type": "mrkdwn", "text": "🔒 *Vencimiento Acreditación:*\n`N/A`"}
                     ]
                 },
-                {"type": "divider"},
                 {
-                    "type": "actions",
-                    "elements": [
-                        {
-                            "type": "button",
-                            "text": {
-                                "type": "plain_text",
-                                "text": "🔍 Ver Componentes del Tablero",
-                                "emoji": True
-                            },
-                            "style": "primary",
-                            "value": comando_usado,
-                            "action_id": "ver_componentes_tablero"
-                        }
-                    ]
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": "Selecciona un componente para desplegar especificaciones completas y link:"
+                    },
+                    "accessory": {
+                        "type": "static_select",
+                        "placeholder": {
+                            "type": "plain_text",
+                            "text": "Ver componentes...",
+                            "emoji": True
+                        },
+                        "action_id": "seleccionar_componente_tablero",
+                        "options": opciones_dropdown
+                    }
                 }
             ]
             
@@ -558,24 +575,53 @@ def handle_tableros(ack, respond, command):
 
     threading.Thread(target=procesar_tarea).start()
 
-# Listener que responde cuando el usuario presiona el botón "Ver Componentes del Tablero"
-@app.action("ver_componentes_tablero")
-def handle_ver_componentes(ack, respond, body):
+
+@app.action("seleccionar_componente_tablero")
+def handle_seleccion_componente(ack, respond, body):
     ack()
     
-    def procesar_click():
+    def procesar_seleccion():
         try:
-            comando_origen = body["actions"][0]["value"]
+            valor_seleccionado = body["actions"][0]["selected_option"]["value"]
             componentes = SheetsRepository.obtener_filas_pestaña("TABLEROS ELECTRICOS")
             
-            # Carga y muestra los componentes desplegados en el chat
-            bloques = BlockKitFactory.crear_lista_tablero(f"Componentes {comando_origen}", componentes)
-            respond(blocks=bloques)
-        except Exception as e:
-            logger.error(f"Error al desplegar componentes: {e}")
-            respond(f"❌ Ocurrió un error al cargar los componentes: {e}")
+            comp_data = next((c for c in componentes if (c.get("COMPONENTE") or c.get("EQUIPO") or c.get("Nombre")) == valor_seleccionado), None)
+            
+            if not comp_data and componentes:
+                comp_data = next((c for c in componentes if valor_seleccionado in str(c.values())), componentes[0])
 
-    threading.Thread(target=procesar_click).start()
+            if comp_data:
+                nombre = comp_data.get("COMPONENTE") or comp_data.get("EQUIPO") or valor_seleccionado
+                marca = comp_data.get("MARCA", "N/A")
+                modelo = comp_data.get("MODELO", "N/A")
+                cantidad = comp_data.get("CANTIDAD", "1")
+                amperaje = comp_data.get("A") or comp_data.get("AMPERAJE")
+                voltaje = comp_data.get("V") or comp_data.get("VOLTAJE")
+                link = comp_data.get("LINK") or comp_data.get("ENLACE") or comp_data.get("URL")
+
+                texto_ficha = f"⚙️ *Ficha Técnica de Componente: {nombre}*\n"
+                texto_ficha += f"📍 *Pertenece a:* `TABLERO DECANTER 2-3`\n\n"
+                texto_ficha += f"• *MARCA:* {marca}\n"
+                texto_ficha += f"• *MODELO:* {modelo}\n"
+                texto_ficha += f"• *CANTIDAD:* {cantidad}\n"
+                if amperaje:
+                    texto_ficha += f"• *A:* {amperaje}\n"
+                if voltaje:
+                    texto_ficha += f"• *V:* {voltaje}\n"
+                if link and link != "#":
+                    texto_ficha += f"• *LINK:* 🔗 <{link}|Abrir Link de Compra / Ficha Técnica>"
+                else:
+                    texto_ficha += f"• *LINK:* No disponible"
+
+                respond(text=texto_ficha)
+            else:
+                respond(f"❌ No se encontraron detalles para {valor_seleccionado}.")
+                
+        except Exception as e:
+            logger.error(f"Error al procesar componente seleccionado: {e}")
+            respond(f"❌ Ocurrió un error al obtener la ficha técnica: {e}")
+
+    threading.Thread(target=procesar_seleccion).start()
 
 # --- GENERADOR Y ENVIADOR DE REPORTES PDF (/resumen) ---
 
