@@ -504,19 +504,26 @@ def handle_equipos(ack, respond, command):
 
 # --- COMANDOS PARA TABLEROS ELÉCTRICOS ---
 
+import threading  # Asegúrate de tener esta importación al inicio de bot.py
+
 @app.command("/tablerodec2")
 @app.command("/tablerodec3")
 @app.command("/tableros")
 def handle_tableros(ack, respond, command):
-    ack()
-    comando_usado = command.get("command", "/tableros")
-    try:
-        componentes = SheetsRepository.obtener_filas_pestaña("TABLEROS ELECTRICOS")
-        bloques = BlockKitFactory.crear_lista_tablero(f"Componentes {comando_usado}", componentes)
-        respond(blocks=bloques)
-    except Exception as e:
-        logger.error(f"Error en comando {comando_usado}: {e}")
-        respond("❌ Ocurrió un error al cargar la lista de tableros eléctricos.")
+    ack()  # Le responde a Slack instantáneamente
+    
+    def procesar_tarea():
+        comando_usado = command.get("command", "/tableros")
+        try:
+            componentes = SheetsRepository.obtener_filas_pestaña("TABLEROS ELECTRICOS")
+            bloques = BlockKitFactory.crear_lista_tablero(f"Componentes {comando_usado}", componentes)
+            respond(blocks=bloques)
+        except Exception as e:
+            logger.error(f"Error en comando {comando_usado}: {e}")
+            respond(f"❌ Ocurrió un error al cargar la lista de tableros eléctricos: {e}")
+
+    # Ejecuta la lectura de Google Sheets en segundo plano
+    threading.Thread(target=procesar_tarea).start()
 
 
 # --- GENERADOR Y ENVIADOR DE REPORTES PDF (/resumen) ---
