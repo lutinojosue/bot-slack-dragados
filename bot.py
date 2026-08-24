@@ -503,27 +503,21 @@ def handle_equipos(ack, respond, command):
 
 
 # --- COMANDOS PARA TABLEROS ELÉCTRICOS ---
-
-# --- COMANDOS PARA TABLEROS ELÉCTRICOS INTERACTIVOS ---
-
 @app.command("/tablerodec2")
-def handle_tablerodec2(ack, respond, command):
+@app.command("/tablerodec3")
+@app.command("/tableros")
+def handle_tableros(ack, respond, command):
     ack()
     
     def procesar_tarea():
+        comando_usado = command.get("command", "/tableros")
         try:
-            # Obtener datos de la pestaña TABLEROS ELECTRICOS
             componentes = SheetsRepository.obtener_filas_pestaña("TABLEROS ELECTRICOS")
-            
-            # Usar la fábrica de BlockKit interactiva para Tablero Decanter 2
-            bloques = BlockKitFactory.crear_interfaz_tablero_interactivo(
-                nombre_tablero="Tablero Decanter 2",
-                componentes=componentes
-            )
+            bloques = BlockKitFactory.crear_lista_tablero(f"Componentes {comando_usado}", componentes)
             respond(blocks=bloques)
         except Exception as e:
-            logger.error(f"Error en /tablerodec2: {e}")
-            respond(f"❌ Ocurrió un error al cargar el Tablero Decanter 2: {e}")
+            logger.error(f"Error en comando {comando_usado}: {e}")
+            respond(f"❌ Ocurrió un error al cargar {comando_usado}: {e}")
 
     threading.Thread(target=procesar_tarea).start()
 
