@@ -504,25 +504,44 @@ def handle_equipos(ack, respond, command):
 
 # --- COMANDOS PARA TABLEROS ELÉCTRICOS ---
 
-import threading  # Asegúrate de tener esta importación al inicio de bot.py
+# --- COMANDOS PARA TABLEROS ELÉCTRICOS INTERACTIVOS ---
 
 @app.command("/tablerodec2")
-@app.command("/tablerodec3")
-@app.command("/tableros")
-def handle_tableros(ack, respond, command):
-    ack()  # Le responde a Slack instantáneamente
+def handle_tablerodec2(ack, respond, command):
+    ack()
     
     def procesar_tarea():
-        comando_usado = command.get("command", "/tableros")
         try:
+            # Obtener datos de la pestaña TABLEROS ELECTRICOS
             componentes = SheetsRepository.obtener_filas_pestaña("TABLEROS ELECTRICOS")
-            bloques = BlockKitFactory.crear_lista_tablero(f"Componentes {comando_usado}", componentes)
+            
+            # Usar la fábrica de BlockKit interactiva para Tablero Decanter 2
+            bloques = BlockKitFactory.crear_interfaz_tablero_interactivo(
+                nombre_tablero="Tablero Decanter 2",
+                componentes=componentes
+            )
             respond(blocks=bloques)
         except Exception as e:
-            logger.error(f"Error en comando {comando_usado}: {e}")
-            respond(f"❌ Ocurrió un error al cargar la lista de tableros eléctricos: {e}")
+            logger.error(f"Error en /tablerodec2: {e}")
+            respond(f"❌ Ocurrió un error al cargar el Tablero Decanter 2: {e}")
 
-    # Ejecuta la lectura de Google Sheets en segundo plano
+    threading.Thread(target=procesar_tarea).start()
+
+
+# Comando general para ver la lista completa
+@app.command("/tableros")
+def handle_tableros(ack, respond, command):
+    ack()
+    
+    def procesar_tarea():
+        try:
+            componentes = SheetsRepository.obtener_filas_pestaña("TABLEROS ELECTRICOS")
+            bloques = BlockKitFactory.crear_lista_tablero("Lista de Tableros Eléctricos", componentes)
+            respond(blocks=bloques)
+        except Exception as e:
+            logger.error(f"Error en /tableros: {e}")
+            respond(f"❌ Ocurrió un error al cargar la lista de tableros: {e}")
+
     threading.Thread(target=procesar_tarea).start()
 
 
