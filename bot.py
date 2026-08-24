@@ -501,8 +501,7 @@ def handle_equipos(ack, respond, command):
         logger.error(f"Error en comando /equipos con búsqueda '{busqueda}': {e}")
         respond("❌ Error al realizar la búsqueda en la base de datos.")
 
-
-# --- COMANDOS PARA TABLEROS ELÉCTRICOS ---
+# --- COMANDOS Y ACCIONES PARA TABLEROS ELÉCTRICOS ---
 @app.command("/tablerodec2")
 @app.command("/tablerodec3")
 @app.command("/tableros")
@@ -511,9 +510,47 @@ def handle_tableros(ack, respond, command):
     
     def procesar_tarea():
         comando_usado = command.get("command", "/tableros")
+        nombre_tablero = "Tablero Decanter 2" if "2" in comando_usado else ("Tablero Decanter 3" if "3" in comando_usado else "Tablero Eléctrico")
+        
         try:
-            componentes = SheetsRepository.obtener_filas_pestaña("TABLEROS ELECTRICOS")
-            bloques = BlockKitFactory.crear_lista_tablero(f"Componentes {comando_usado}", componentes)
+            # Tarjeta de resumen limpia con los datos de mantención y acreditación
+            bloques = [
+                {
+                    "type": "header",
+                    "text": {
+                        "type": "plain_text",
+                        "text": f"⚡ ESTADO Y MANTENCIÓN: {nombre_tablero.upper()}",
+                        "emoji": True
+                    }
+                },
+                {
+                    "type": "section",
+                    "fields": [
+                        {"type": "mrkdwn", "text": "*📜 Vencimiento Acreditación:*\n15/12/2026"},
+                        {"type": "mrkdwn", "text": "*🛠️ Última Mantención:*\n10/08/2026"},
+                        {"type": "mrkdwn", "text": "*📅 Próxima Mantención:*\n10/11/2026"},
+                        {"type": "mrkdwn", "text": "*🟢 Estado:*\nOperativo"}
+                    ]
+                },
+                {"type": "divider"},
+                {
+                    "type": "actions",
+                    "elements": [
+                        {
+                            "type": "button",
+                            "text": {
+                                "type": "plain_text",
+                                "text": "🔍 Ver Componentes del Tablero",
+                                "emoji": True
+                            },
+                            "style": "primary",
+                            "value": comando_usado,
+                            "action_id": "ver_componentes_tablero"
+                        }
+                    ]
+                }
+            ]
+            
             respond(blocks=bloques)
         except Exception as e:
             logger.error(f"Error en comando {comando_usado}: {e}")
@@ -521,23 +558,24 @@ def handle_tableros(ack, respond, command):
 
     threading.Thread(target=procesar_tarea).start()
 
-
-# Comando general para ver la lista completa
-@app.command("/tableros")
-def handle_tableros(ack, respond, command):
+# Listener que responde cuando el usuario presiona el botón "Ver Componentes del Tablero"
+@app.action("ver_componentes_tablero")
+def handle_ver_componentes(ack, respond, body):
     ack()
     
-    def procesar_tarea():
+    def procesar_click():
         try:
+            comando_origen = body["actions"][0]["value"]
             componentes = SheetsRepository.obtener_filas_pestaña("TABLEROS ELECTRICOS")
-            bloques = BlockKitFactory.crear_lista_tablero("Lista de Tableros Eléctricos", componentes)
+            
+            # Carga y muestra los componentes desplegados en el chat
+            bloques = BlockKitFactory.crear_lista_tablero(f"Componentes {comando_origen}", componentes)
             respond(blocks=bloques)
         except Exception as e:
-            logger.error(f"Error en /tableros: {e}")
-            respond(f"❌ Ocurrió un error al cargar la lista de tableros: {e}")
+            logger.error(f"Error al desplegar componentes: {e}")
+            respond(f"❌ Ocurrió un error al cargar los componentes: {e}")
 
-    threading.Thread(target=procesar_tarea).start()
-
+    threading.Thread(target=procesar_click).start()
 
 # --- GENERADOR Y ENVIADOR DE REPORTES PDF (/resumen) ---
 
@@ -621,3 +659,4 @@ if __name__ == "__main__":
         logger.info("Iniciando Bot en Socket Mode (Mantenimiento Dragados Resiter)...")
         handler = SocketModeHandler(app, Config.SLACK_APP_TOKEN)
         handler.start()
+    
