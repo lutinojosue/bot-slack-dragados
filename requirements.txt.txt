@@ -1,0 +1,5 @@
+slack_bolt
+gspread
+google-auth
+reportlab
+python-dateutil
