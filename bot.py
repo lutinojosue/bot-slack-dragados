@@ -501,15 +501,22 @@ def handle_equipos(ack, respond, command):
         logger.error(f"Error en comando /equipos con búsqueda '{busqueda}': {e}")
         respond("❌ Error al realizar la búsqueda en la base de datos.")
 
-# --- COMANDOS Y ACCIONES PARA TABLEROS ELÉCTRICOS (DINÁMICO DESDE EXCEL) ---
+# ==========================================
+# MÓDULO: TABLEROS ELÉCTRICOS (DECANTER 2-3)
+# ==========================================
+
+import logging
+import threading
+
+logger = logging.getLogger(__name__)
 
 def _obtener_campo(row, nombres_posibles, default=""):
-    """Busca un valor en el diccionario ignorando mayúsculas, minúsculas y espacios en las claves."""
-    row_normalizado = {str(k).strip().upper(): v for k, v in row.items() if v is not None}
+    """Busca un valor en la fila normalizando los nombres de columnas."""
+    row_norm = {str(k).strip().upper(): str(v).strip() for k, v in row.items() if k and v is not None}
     for nombre in nombres_posibles:
-        nombre_clean = nombre.strip().upper()
-        if nombre_clean in row_normalizado and str(row_normalizado[nombre_clean]).strip():
-            return str(row_normalizado[nombre_clean]).strip()
+        n_clean = nombre.strip().upper()
+        if n_clean in row_norm and row_norm[n_clean]:
+            return row_norm[n_clean]
     return default
 
 
@@ -528,10 +535,14 @@ def handle_tableros(ack, respond, command):
             
             opciones_dropdown = []
             for item in componentes:
-                # Busca automáticamente el nombre del componente según los encabezados más habituales
-                nombre_comp = _obtener_campo(item, ["COMPONENTE", "EQUIPO", "DESCRIPCION", "NOMBRE", "ITEM", "DETALLE"], default="Componente sin nombre")
-                marca = _obtener_campo(item, ["MARCA"], default="")
-                
+                # Extrae el nombre del componente de la columna 'TABLEROS'
+                nombre_comp = _obtener_campo(item, ["TABLEROS", "TABLERO", "COMPONENTE", "EQUIPO", "DESCRIPCION"])
+                marca = _obtener_campo(item, ["MARCA", "MA"])
+
+                # Omite filas vacías o el título general 'TABLERO DECANTER 2-3'
+                if not nombre_comp or "TABLERO DECANTER" in nombre_comp.upper():
+                    continue
+
                 label = f"{nombre_comp} | {marca}".strip(" |")[:75]
                 
                 opciones_dropdown.append({
@@ -539,9 +550,12 @@ def handle_tableros(ack, respond, command):
                     "value": str(nombre_comp)[:75]
                 })
             
-            opciones_dropdown = opciones_dropdown[:100] if opciones_dropdown else [
-                {"text": {"type": "plain_text", "text": "Sin componentes registrados", "emoji": True}, "value": "ninguno"}
-            ]
+            if not opciones_dropdown:
+                opciones_dropdown = [
+                    {"text": {"type": "plain_text", "text": "Sin componentes registrados", "emoji": True}, "value": "ninguno"}
+                ]
+            else:
+                opciones_dropdown = opciones_dropdown[:100]
 
             bloques = [
                 {
@@ -597,32 +611,61 @@ def handle_seleccion_componente(ack, respond, body):
             
             comp_data = None
             for c in componentes:
-                nom = _obtener_campo(c, ["COMPONENTE", "EQUIPO", "DESCRIPCION", "NOMBRE", "ITEM", "DETALLE"])
+                nom = _obtener_campo(c, ["TABLEROS", "TABLERO", "COMPONENTE", "EQUIPO", "DESCRIPCION"])
                 if nom == valor_seleccionado or valor_seleccionado in nom:
                     comp_data = c
                     break
-            
-            if not comp_data and componentes:
-                comp_data = componentes[0]
 
             if comp_data:
-                nombre = _obtener_campo(comp_data, ["COMPONENTE", "EQUIPO", "DESCRIPCION", "NOMBRE", "ITEM"], default=valor_seleccionado)
-                marca = _obtener_campo(comp_data, ["MARCA"], default="N/A")
+                # Extracción de TODAS las columnas del Excel
+                nombre = _obtener_campo(comp_data, ["TABLEROS", "TABLERO", "COMPONENTE"], default=valor_seleccionado)
+                marca = _obtener_campo(comp_data, ["MARCA", "MA"], default="N/A")
                 modelo = _obtener_campo(comp_data, ["MODELO"], default="N/A")
-                cantidad = _obtener_campo(comp_data, ["CANTIDAD", "CANT"], default="1")
-                amperaje = _obtener_campo(comp_data, ["A", "AMPERAJE", "CORRIENTE"])
+                cantidad = _obtener_campo(comp_data, ["CANTIDAD", "CANTIDA", "CANT"], default="N/A")
+                otros = _obtener_campo(comp_data, ["OTROS"])
+                kw = _obtener_campo(comp_data, ["KW", "POTENCIA"])
                 voltaje = _obtener_campo(comp_data, ["V", "VOLTAJE", "TENSION"])
-                link = _obtener_campo(comp_data, ["LINK", "ENLACE", "URL", "FICHA"])
+                eficiencia = _obtener_campo(comp_data, ["EFICIENC", "EFICIENCIA"])
+                calibre = _obtener_campo(comp_data, ["CALIBRE DE CABLI", "CALIBRE DE CABLE", "CALIBRE"])
+                terminal = _obtener_campo(comp_data, ["TERMINAL MCI", "TERMINAL"])
+                venc_acred = _obtener_campo(comp_data, ["VENC ACREDITACION", "VENC ACREDITACIO", "ACREDITACION"])
+                venc_hora = _obtener_campo(comp_data, ["VENC HORA", "HORAS"])
+                ult_mant = _obtener_campo(comp_data, ["ULTIMA MANTENCIO", "ULTIMA MANTENCION"])
+                prox_mant = _obtener_campo(comp_data, ["PROXIMA MANTENC", "PROXIMA MANTENCION"])
+                precio = _obtener_campo(comp_data, ["PRECIO", "PRECIO /"])
+                link = _obtener_campo(comp_data, ["LINK", "ENLACE", "URL"])
 
-                texto_ficha = f"⚙️ *Ficha Técnica de Componente: {nombre}*\n"
+                # Armado de la Ficha Técnica con TODOS los datos disponibles
+                texto_ficha = f"⚙️ *Ficha Técnica Completa: {nombre}*\n"
                 texto_ficha += f"📍 *Pertenece a:* `TABLERO DECANTER 2-3`\n\n"
+                
                 texto_ficha += f"• *MARCA:* {marca}\n"
                 texto_ficha += f"• *MODELO:* {modelo}\n"
                 texto_ficha += f"• *CANTIDAD:* {cantidad}\n"
-                if amperaje:
-                    texto_ficha += f"• *A:* {amperaje}\n"
+                
+                if otros:
+                    texto_ficha += f"• *OTROS:* {otros}\n"
+                if kw:
+                    texto_ficha += f"• *KW:* {kw}\n"
                 if voltaje:
-                    texto_ficha += f"• *V:* {voltaje}\n"
+                    texto_ficha += f"• *VOLTAJE (V):* {voltaje}\n"
+                if eficiencia:
+                    texto_ficha += f"• *EFICIENCIA:* {eficiencia}\n"
+                if calibre:
+                    texto_ficha += f"• *CALIBRE DE CABLE:* {calibre}\n"
+                if terminal:
+                    texto_ficha += f"• *TERMINAL MCI:* {terminal}\n"
+                if venc_acred:
+                    texto_ficha += f"• *VENC. ACREDITACIÓN:* {venc_acred}\n"
+                if venc_hora:
+                    texto_ficha += f"• *VENC. HORA:* {venc_hora}\n"
+                if ult_mant:
+                    texto_ficha += f"• *ÚLTIMA MANTENCIÓN:* {ult_mant}\n"
+                if prox_mant:
+                    texto_ficha += f"• *PRÓXIMA MANTENCIÓN:* {prox_mant}\n"
+                if precio:
+                    texto_ficha += f"• *PRECIO:* {precio}\n"
+                    
                 if link and link != "#":
                     texto_ficha += f"• *LINK:* 🔗 <{link}|Abrir Link de Compra / Ficha Técnica>"
                 else:
@@ -630,14 +673,13 @@ def handle_seleccion_componente(ack, respond, body):
 
                 respond(text=texto_ficha)
             else:
-                respond(f"❌ No se encontraron detalles para {valor_seleccionado}.")
+                respond(f"❌ No se encontraron detalles para *{valor_seleccionado}*.")
                 
         except Exception as e:
-            logger.error(f"Error al procesar componente seleccionado: {e}")
+            logger.error(f"Error al obtener ficha de componente: {e}")
             respond(f"❌ Ocurrió un error al obtener la ficha técnica: {e}")
 
     threading.Thread(target=procesar_seleccion).start()
-
 # --- GENERADOR Y ENVIADOR DE REPORTES PDF (/resumen) ---
 
 @app.command("/resumen")
