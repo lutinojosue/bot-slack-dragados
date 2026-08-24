@@ -539,6 +539,7 @@ def handle_tableros(ack, respond, command):
                 modelo = _obtener_campo(item, ["MODELO"])
                 cant = _obtener_campo(item, ["CANTIDAD", "CANTIDA", "CANT"])
                 kw = _obtener_campo(item, ["KW", "POTENCIA"])
+                amperaje = _obtener_campo(item, ["A", "AMPERAJE", "AMP", "AMPERIOS"])
                 voltaje = _obtener_campo(item, ["V", "VOLTAJE", "TENSION"])
                 otros = _obtener_campo(item, ["OTROS"])
 
@@ -548,8 +549,9 @@ def handle_tableros(ack, respond, command):
                 especificaciones = []
                 if marca: especificaciones.append(marca)
                 if modelo: especificaciones.append(modelo)
-                if kw: especificaciones.append(f"{kw} kW/A")
-                elif otros: especificaciones.append(otros)
+                if kw: especificaciones.append(f"{kw} kW")
+                if amperaje: especificaciones.append(f"{amperaje} A")
+                if otros: especificaciones.append(otros)
                 if voltaje: especificaciones.append(f"{voltaje}V")
                 if cant and cant != "1": especificaciones.append(f"x{cant}")
 
@@ -633,6 +635,7 @@ def handle_seleccion_componente(ack, respond, body):
                 cantidad = _obtener_campo(comp_data, ["CANTIDAD", "CANTIDA", "CANT"], default="N/A")
                 otros = _obtener_campo(comp_data, ["OTROS"])
                 kw = _obtener_campo(comp_data, ["KW", "POTENCIA"])
+                amperaje = _obtener_campo(comp_data, ["A", "AMPERAJE", "AMP", "AMPERIOS"])
                 voltaje = _obtener_campo(comp_data, ["V", "VOLTAJE", "TENSION"])
                 eficiencia = _obtener_campo(comp_data, ["EFICIENC", "EFICIENCIA"])
                 calibre = _obtener_campo(comp_data, ["CALIBRE DE CABLI", "CALIBRE DE CABLE", "CALIBRE"])
@@ -652,7 +655,8 @@ def handle_seleccion_componente(ack, respond, body):
                 texto_ficha += f"• *CANTIDAD:* {cantidad}\n"
                 
                 if otros: texto_ficha += f"• *OTROS:* {otros}\n"
-                if kw: texto_ficha += f"• *KW / AMPERAJE:* {kw}\n"
+                if kw: texto_ficha += f"• *KW:* {kw}\n"
+                if amperaje: texto_ficha += f"• *AMPERAJE:* {amperaje}\n"
                 if voltaje: texto_ficha += f"• *VOLTAJE:* {voltaje}\n"
                 if eficiencia: texto_ficha += f"• *EFICIENCIA:* {eficiencia}\n"
                 if calibre: texto_ficha += f"• *CALIBRE DE CABLE:* {calibre}\n"
@@ -662,13 +666,17 @@ def handle_seleccion_componente(ack, respond, body):
                 if ult_mant: texto_ficha += f"• *ÚLTIMA MANTENCIÓN:* {ult_mant}\n"
                 if prox_mant: texto_ficha += f"• *PRÓXIMA MANTENCIÓN:* {prox_mant}\n"
                 if precio: texto_ficha += f"• *PRECIO:* {precio}\n"
-                    
-                if link and link != "#" and link.upper() != "N/A":
-                    # Si contiene una URL completa (http/https)
-                    if link.startswith("http://") or link.startswith("https://"):
-                        texto_ficha += f"• *LINK:* 🔗 <{link}|Abrir Link de Compra / Ficha Técnica>"
+                
+                # Manejo de enlaces y URLs
+                if link and link.upper() != "N/A" and link != "#":
+                    url_limpia = link.strip()
+                    if url_limpia.startswith("www."):
+                        url_limpia = "https://" + url_limpia
+                        
+                    if url_limpia.startswith("http://") or url_limpia.startswith("https://"):
+                        texto_ficha += f"• *LINK:* 🔗 <{url_limpia}|Abrir Link de Compra / Ficha Técnica>"
                     else:
-                        texto_ficha += f"• *LINK:* 🔗 {link}"
+                        texto_ficha += f"• *LINK:* 🔗 {url_limpia} *(Pega la URL 'https://...' completa en Excel)*"
                 else:
                     texto_ficha += f"• *LINK:* No disponible"
 
