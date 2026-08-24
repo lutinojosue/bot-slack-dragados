@@ -504,7 +504,6 @@ def handle_equipos(ack, respond, command):
 # ==========================================
 # MÓDULO: TABLEROS ELÉCTRICOS (DECANTER 2-3)
 # ==========================================
-
 import logging
 import threading
 
@@ -543,11 +542,9 @@ def handle_tableros(ack, respond, command):
                 voltaje = _obtener_campo(item, ["V", "VOLTAJE", "TENSION"])
                 otros = _obtener_campo(item, ["OTROS"])
 
-                # Descartar filas vacías o el título del tablero
                 if not nombre_comp or "TABLERO DECANTER" in nombre_comp.upper():
                     continue
 
-                # Construir una etiqueta diferenciadora con las especificaciones técnicas principales
                 especificaciones = []
                 if marca: especificaciones.append(marca)
                 if modelo: especificaciones.append(modelo)
@@ -557,12 +554,8 @@ def handle_tableros(ack, respond, command):
                 if cant and cant != "1": especificaciones.append(f"x{cant}")
 
                 info_extra = " | ".join(especificaciones)
-                if info_extra:
-                    label_texto = f"{nombre_comp} ({info_extra})"[:75]
-                else:
-                    label_texto = nombre_comp[:75]
+                label_texto = f"{nombre_comp} ({info_extra})"[:75] if info_extra else nombre_comp[:75]
                 
-                # Se envía el índice único de la fila (idx)
                 opciones_dropdown.append({
                     "text": {"type": "plain_text", "text": label_texto, "emoji": True},
                     "value": str(idx)
@@ -634,7 +627,6 @@ def handle_seleccion_componente(ack, respond, body):
                     comp_data = componentes[idx_fila]
 
             if comp_data:
-                # Extracción de todas las columnas registradas en la fila correspondiente
                 nombre = _obtener_campo(comp_data, ["TABLEROS", "TABLERO", "COMPONENTE"], default="Componente")
                 marca = _obtener_campo(comp_data, ["MARCA", "MA"], default="N/A")
                 modelo = _obtener_campo(comp_data, ["MODELO"], default="N/A")
@@ -661,7 +653,7 @@ def handle_seleccion_componente(ack, respond, body):
                 
                 if otros: texto_ficha += f"• *OTROS:* {otros}\n"
                 if kw: texto_ficha += f"• *KW / AMPERAJE:* {kw}\n"
-                if voltaje: texto_ficha += f"• *VOLTAJE (V):* {voltaje}\n"
+                if voltaje: texto_ficha += f"• *VOLTAJE:* {voltaje}\n"
                 if eficiencia: texto_ficha += f"• *EFICIENCIA:* {eficiencia}\n"
                 if calibre: texto_ficha += f"• *CALIBRE DE CABLE:* {calibre}\n"
                 if terminal: texto_ficha += f"• *TERMINAL MCI:* {terminal}\n"
@@ -671,8 +663,12 @@ def handle_seleccion_componente(ack, respond, body):
                 if prox_mant: texto_ficha += f"• *PRÓXIMA MANTENCIÓN:* {prox_mant}\n"
                 if precio: texto_ficha += f"• *PRECIO:* {precio}\n"
                     
-                if link and link != "#":
-                    texto_ficha += f"• *LINK:* 🔗 <{link}|Abrir Link de Compra / Ficha Técnica>"
+                if link and link != "#" and link.upper() != "N/A":
+                    # Si contiene una URL completa (http/https)
+                    if link.startswith("http://") or link.startswith("https://"):
+                        texto_ficha += f"• *LINK:* 🔗 <{link}|Abrir Link de Compra / Ficha Técnica>"
+                    else:
+                        texto_ficha += f"• *LINK:* 🔗 {link}"
                 else:
                     texto_ficha += f"• *LINK:* No disponible"
 
