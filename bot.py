@@ -506,6 +506,7 @@ def handle_equipos(ack, respond, command):
 # ==========================================
 import logging
 import threading
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -517,6 +518,25 @@ def _obtener_campo(row, nombres_posibles, default=""):
         if n_clean in row_norm and row_norm[n_clean]:
             return row_norm[n_clean]
     return default
+
+def _limpiar_url(val):
+    """Limpia y valida la URL eliminando comillas, espacios y asegurando el protocolo https://"""
+    if not val:
+        return None
+    val_str = str(val).strip().strip('"').strip("'").strip()
+    
+    # Si viene como fórmula de Google Sheets =HYPERLINK("http...", "texto")
+    match_formula = re.search(r'HYPERLINK\s*\(\s*["\']([^"\']+)["\']', val_str, re.IGNORECASE)
+    if match_formula:
+        val_str = match_formula.group(1).strip()
+        
+    if val_str.upper() in ["N/A", "NONE", "-", "#", "ENLACE", "LINK", ""]:
+        return None
+        
+    if not (val_str.startswith("http://") or val_str.startswith("https://")):
+        val_str = "https://" + val_str
+        
+    return val_str
 
 
 @app.command("/tablerodec2")
@@ -645,7 +665,7 @@ def handle_seleccion_componente(ack, respond, body):
                 ult_mant = _obtener_campo(comp_data, ["ULTIMA MANTENCIO", "ULTIMA MANTENCION"])
                 prox_mant = _obtener_campo(comp_data, ["PROXIMA MANTENC", "PROXIMA MANTENCION"])
                 precio = _obtener_campo(comp_data, ["PRECIO"])
-                link = _obtener_campo(comp_data, ["LINK", "ENLACE", "URL"])
+                link_raw = _obtener_campo(comp_data, ["LINK", "ENLACE", "URL"])
 
                 texto_ficha = f"⚙️ *Ficha Técnica Completa: {nombre}*\n"
                 texto_ficha += f"📍 *Pertenece a:* `TABLERO DECANTER 2-3`\n\n"
@@ -667,18 +687,12 @@ def handle_seleccion_componente(ack, respond, body):
                 if prox_mant: texto_ficha += f"• *PRÓXIMA MANTENCIÓN:* {prox_mant}\n"
                 if precio: texto_ficha += f"• *PRECIO:* {precio}\n"
                 
-                # Manejo de enlaces y URLs
-                if link and link.upper() != "N/A" and link != "#":
-                    url_limpia = link.strip()
-                    if url_limpia.startswith("www."):
-                        url_limpia = "https://" + url_limpia
-                        
-                    if url_limpia.startswith("http://") or url_limpia.startswith("https://"):
-                        texto_ficha += f"• *LINK:* 🔗 <{url_limpia}|Abrir Link de Compra / Ficha Técnica>"
-                    else:
-                        texto_ficha += f"• *LINK:* 🔗 {url_limpia} *(Pega la URL 'https://...' completa en Excel)*"
+                # Procesamiento e inserción limpia del enlace
+                url_valida = _limpiar_url(link_raw)
+                if url_valida:
+                    texto_ficha += f"• *LINK:* 🔗 <{url_valida}|Abrir Link de Compra / Ficha Técnica>\n"
                 else:
-                    texto_ficha += f"• *LINK:* No disponible"
+                    texto_ficha += "• *LINK:* No disponible\n"
 
                 respond(text=texto_ficha)
             else:
