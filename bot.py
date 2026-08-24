@@ -160,8 +160,8 @@ class SheetsRepository:
                 else:
                     logger.critical(f"No se pudo conectar a Google Sheets tras {intentos} intentos.")
                     return []
-   @classmethod
-    def buscar_por_coincidencia(cls, nombre_pestaña: str, termino: str, campo_especifico: Optional[str] = None, columna_clave: Optional[str] = None) -> List[Dict[str, Any]]:
+@classmethod
+def buscar_por_coincidencia(cls, nombre_pestaña: str, termino: str, campo_especifico: Optional[str] = None, columna_clave: Optional[str] = None) -> List[Dict[str, Any]]:
         campo_especifico = campo_especifico or columna_clave
         filas = cls.obtener_filas_pestaña(nombre_pestaña)
         if not termino:
