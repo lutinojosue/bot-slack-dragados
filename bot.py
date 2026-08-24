@@ -534,20 +534,38 @@ def handle_tableros(ack, respond, command):
             componentes = SheetsRepository.obtener_filas_pestaña("TABLEROS ELECTRICOS")
             
             opciones_dropdown = []
-            for item in componentes:
-                # Extrae el nombre del componente de la columna 'TABLEROS'
+            for idx, item in enumerate(componentes):
                 nombre_comp = _obtener_campo(item, ["TABLEROS", "TABLERO", "COMPONENTE", "EQUIPO", "DESCRIPCION"])
                 marca = _obtener_campo(item, ["MARCA", "MA"])
+                modelo = _obtener_campo(item, ["MODELO"])
+                cant = _obtener_campo(item, ["CANTIDAD", "CANTIDA", "CANT"])
+                kw = _obtener_campo(item, ["KW", "POTENCIA"])
+                voltaje = _obtener_campo(item, ["V", "VOLTAJE", "TENSION"])
+                otros = _obtener_campo(item, ["OTROS"])
 
-                # Omite filas vacías o el título general 'TABLERO DECANTER 2-3'
+                # Descartar filas vacías o el título del tablero
                 if not nombre_comp or "TABLERO DECANTER" in nombre_comp.upper():
                     continue
 
-                label = f"{nombre_comp} | {marca}".strip(" |")[:75]
+                # Construir una etiqueta diferenciadora con las especificaciones técnicas principales
+                especificaciones = []
+                if marca: especificaciones.append(marca)
+                if modelo: especificaciones.append(modelo)
+                if kw: especificaciones.append(f"{kw} kW/A")
+                elif otros: especificaciones.append(otros)
+                if voltaje: especificaciones.append(f"{voltaje}V")
+                if cant and cant != "1": especificaciones.append(f"x{cant}")
+
+                info_extra = " | ".join(especificaciones)
+                if info_extra:
+                    label_texto = f"{nombre_comp} ({info_extra})"[:75]
+                else:
+                    label_texto = nombre_comp[:75]
                 
+                # Se envía el índice único de la fila (idx)
                 opciones_dropdown.append({
-                    "text": {"type": "plain_text", "text": label, "emoji": True},
-                    "value": str(nombre_comp)[:75]
+                    "text": {"type": "plain_text", "text": label_texto, "emoji": True},
+                    "value": str(idx)
                 })
             
             if not opciones_dropdown:
@@ -610,15 +628,14 @@ def handle_seleccion_componente(ack, respond, body):
             componentes = SheetsRepository.obtener_filas_pestaña("TABLEROS ELECTRICOS")
             
             comp_data = None
-            for c in componentes:
-                nom = _obtener_campo(c, ["TABLEROS", "TABLERO", "COMPONENTE", "EQUIPO", "DESCRIPCION"])
-                if nom == valor_seleccionado or valor_seleccionado in nom:
-                    comp_data = c
-                    break
+            if valor_seleccionado.isdigit():
+                idx_fila = int(valor_seleccionado)
+                if 0 <= idx_fila < len(componentes):
+                    comp_data = componentes[idx_fila]
 
             if comp_data:
-                # Extracción de TODAS las columnas del Excel
-                nombre = _obtener_campo(comp_data, ["TABLEROS", "TABLERO", "COMPONENTE"], default=valor_seleccionado)
+                # Extracción de todas las columnas registradas en la fila correspondiente
+                nombre = _obtener_campo(comp_data, ["TABLEROS", "TABLERO", "COMPONENTE"], default="Componente")
                 marca = _obtener_campo(comp_data, ["MARCA", "MA"], default="N/A")
                 modelo = _obtener_campo(comp_data, ["MODELO"], default="N/A")
                 cantidad = _obtener_campo(comp_data, ["CANTIDAD", "CANTIDA", "CANT"], default="N/A")
@@ -628,14 +645,13 @@ def handle_seleccion_componente(ack, respond, body):
                 eficiencia = _obtener_campo(comp_data, ["EFICIENC", "EFICIENCIA"])
                 calibre = _obtener_campo(comp_data, ["CALIBRE DE CABLI", "CALIBRE DE CABLE", "CALIBRE"])
                 terminal = _obtener_campo(comp_data, ["TERMINAL MCI", "TERMINAL"])
-                venc_acred = _obtener_campo(comp_data, ["VENC ACREDITACION", "VENC ACREDITACIO", "ACREDITACION"])
+                venc_acred = _obtener_campo(comp_data, ["VENC ACREDITACIO", "VENC ACREDITACION"])
                 venc_hora = _obtener_campo(comp_data, ["VENC HORA", "HORAS"])
                 ult_mant = _obtener_campo(comp_data, ["ULTIMA MANTENCIO", "ULTIMA MANTENCION"])
                 prox_mant = _obtener_campo(comp_data, ["PROXIMA MANTENC", "PROXIMA MANTENCION"])
-                precio = _obtener_campo(comp_data, ["PRECIO", "PRECIO /"])
+                precio = _obtener_campo(comp_data, ["PRECIO"])
                 link = _obtener_campo(comp_data, ["LINK", "ENLACE", "URL"])
 
-                # Armado de la Ficha Técnica con TODOS los datos disponibles
                 texto_ficha = f"⚙️ *Ficha Técnica Completa: {nombre}*\n"
                 texto_ficha += f"📍 *Pertenece a:* `TABLERO DECANTER 2-3`\n\n"
                 
@@ -643,28 +659,17 @@ def handle_seleccion_componente(ack, respond, body):
                 texto_ficha += f"• *MODELO:* {modelo}\n"
                 texto_ficha += f"• *CANTIDAD:* {cantidad}\n"
                 
-                if otros:
-                    texto_ficha += f"• *OTROS:* {otros}\n"
-                if kw:
-                    texto_ficha += f"• *KW:* {kw}\n"
-                if voltaje:
-                    texto_ficha += f"• *VOLTAJE (V):* {voltaje}\n"
-                if eficiencia:
-                    texto_ficha += f"• *EFICIENCIA:* {eficiencia}\n"
-                if calibre:
-                    texto_ficha += f"• *CALIBRE DE CABLE:* {calibre}\n"
-                if terminal:
-                    texto_ficha += f"• *TERMINAL MCI:* {terminal}\n"
-                if venc_acred:
-                    texto_ficha += f"• *VENC. ACREDITACIÓN:* {venc_acred}\n"
-                if venc_hora:
-                    texto_ficha += f"• *VENC. HORA:* {venc_hora}\n"
-                if ult_mant:
-                    texto_ficha += f"• *ÚLTIMA MANTENCIÓN:* {ult_mant}\n"
-                if prox_mant:
-                    texto_ficha += f"• *PRÓXIMA MANTENCIÓN:* {prox_mant}\n"
-                if precio:
-                    texto_ficha += f"• *PRECIO:* {precio}\n"
+                if otros: texto_ficha += f"• *OTROS:* {otros}\n"
+                if kw: texto_ficha += f"• *KW / AMPERAJE:* {kw}\n"
+                if voltaje: texto_ficha += f"• *VOLTAJE (V):* {voltaje}\n"
+                if eficiencia: texto_ficha += f"• *EFICIENCIA:* {eficiencia}\n"
+                if calibre: texto_ficha += f"• *CALIBRE DE CABLE:* {calibre}\n"
+                if terminal: texto_ficha += f"• *TERMINAL MCI:* {terminal}\n"
+                if venc_acred: texto_ficha += f"• *VENC. ACREDITACIÓN:* {venc_acred}\n"
+                if venc_hora: texto_ficha += f"• *VENC. HORA:* {venc_hora}\n"
+                if ult_mant: texto_ficha += f"• *ÚLTIMA MANTENCIÓN:* {ult_mant}\n"
+                if prox_mant: texto_ficha += f"• *PRÓXIMA MANTENCIÓN:* {prox_mant}\n"
+                if precio: texto_ficha += f"• *PRECIO:* {precio}\n"
                     
                 if link and link != "#":
                     texto_ficha += f"• *LINK:* 🔗 <{link}|Abrir Link de Compra / Ficha Técnica>"
@@ -673,7 +678,7 @@ def handle_seleccion_componente(ack, respond, body):
 
                 respond(text=texto_ficha)
             else:
-                respond(f"❌ No se encontraron detalles para *{valor_seleccionado}*.")
+                respond(f"❌ No se pudieron cargar los datos de la fila seleccionada.")
                 
         except Exception as e:
             logger.error(f"Error al obtener ficha de componente: {e}")
