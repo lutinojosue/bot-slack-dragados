@@ -501,7 +501,17 @@ def handle_equipos(ack, respond, command):
         logger.error(f"Error en comando /equipos con búsqueda '{busqueda}': {e}")
         respond("❌ Error al realizar la búsqueda en la base de datos.")
 
-# --- COMANDOS Y ACCIONES PARA TABLEROS ELÉCTRICOS (INTERFAZ COMPLETA) ---
+# --- COMANDOS Y ACCIONES PARA TABLEROS ELÉCTRICOS (DINÁMICO DESDE EXCEL) ---
+
+def _obtener_campo(row, nombres_posibles, default=""):
+    """Busca un valor en el diccionario ignorando mayúsculas, minúsculas y espacios en las claves."""
+    row_normalizado = {str(k).strip().upper(): v for k, v in row.items() if v is not None}
+    for nombre in nombres_posibles:
+        nombre_clean = nombre.strip().upper()
+        if nombre_clean in row_normalizado and str(row_normalizado[nombre_clean]).strip():
+            return str(row_normalizado[nombre_clean]).strip()
+    return default
+
 
 @app.command("/tablerodec2")
 @app.command("/tablerodec3")
@@ -516,11 +526,12 @@ def handle_tableros(ack, respond, command):
         try:
             componentes = SheetsRepository.obtener_filas_pestaña("TABLEROS ELECTRICOS")
             
-            # Construye las opciones para el menú desplegable
             opciones_dropdown = []
             for item in componentes:
-                nombre_comp = item.get("COMPONENTE") or item.get("EQUIPO") or item.get("Nombre") or "Componente"
-                marca = item.get("MARCA", "")
+                # Busca automáticamente el nombre del componente según los encabezados más habituales
+                nombre_comp = _obtener_campo(item, ["COMPONENTE", "EQUIPO", "DESCRIPCION", "NOMBRE", "ITEM", "DETALLE"], default="Componente sin nombre")
+                marca = _obtener_campo(item, ["MARCA"], default="")
+                
                 label = f"{nombre_comp} | {marca}".strip(" |")[:75]
                 
                 opciones_dropdown.append({
@@ -528,7 +539,6 @@ def handle_tableros(ack, respond, command):
                     "value": str(nombre_comp)[:75]
                 })
             
-            # Limita a 100 por restricción de Slack
             opciones_dropdown = opciones_dropdown[:100] if opciones_dropdown else [
                 {"text": {"type": "plain_text", "text": "Sin componentes registrados", "emoji": True}, "value": "ninguno"}
             ]
@@ -585,19 +595,24 @@ def handle_seleccion_componente(ack, respond, body):
             valor_seleccionado = body["actions"][0]["selected_option"]["value"]
             componentes = SheetsRepository.obtener_filas_pestaña("TABLEROS ELECTRICOS")
             
-            comp_data = next((c for c in componentes if (c.get("COMPONENTE") or c.get("EQUIPO") or c.get("Nombre")) == valor_seleccionado), None)
+            comp_data = None
+            for c in componentes:
+                nom = _obtener_campo(c, ["COMPONENTE", "EQUIPO", "DESCRIPCION", "NOMBRE", "ITEM", "DETALLE"])
+                if nom == valor_seleccionado or valor_seleccionado in nom:
+                    comp_data = c
+                    break
             
             if not comp_data and componentes:
-                comp_data = next((c for c in componentes if valor_seleccionado in str(c.values())), componentes[0])
+                comp_data = componentes[0]
 
             if comp_data:
-                nombre = comp_data.get("COMPONENTE") or comp_data.get("EQUIPO") or valor_seleccionado
-                marca = comp_data.get("MARCA", "N/A")
-                modelo = comp_data.get("MODELO", "N/A")
-                cantidad = comp_data.get("CANTIDAD", "1")
-                amperaje = comp_data.get("A") or comp_data.get("AMPERAJE")
-                voltaje = comp_data.get("V") or comp_data.get("VOLTAJE")
-                link = comp_data.get("LINK") or comp_data.get("ENLACE") or comp_data.get("URL")
+                nombre = _obtener_campo(comp_data, ["COMPONENTE", "EQUIPO", "DESCRIPCION", "NOMBRE", "ITEM"], default=valor_seleccionado)
+                marca = _obtener_campo(comp_data, ["MARCA"], default="N/A")
+                modelo = _obtener_campo(comp_data, ["MODELO"], default="N/A")
+                cantidad = _obtener_campo(comp_data, ["CANTIDAD", "CANT"], default="1")
+                amperaje = _obtener_campo(comp_data, ["A", "AMPERAJE", "CORRIENTE"])
+                voltaje = _obtener_campo(comp_data, ["V", "VOLTAJE", "TENSION"])
+                link = _obtener_campo(comp_data, ["LINK", "ENLACE", "URL", "FICHA"])
 
                 texto_ficha = f"⚙️ *Ficha Técnica de Componente: {nombre}*\n"
                 texto_ficha += f"📍 *Pertenece a:* `TABLERO DECANTER 2-3`\n\n"
